@@ -1,14 +1,13 @@
 cmake_minimum_required(VERSION 3.26)
 project(FlowDB)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 
-include_directories(/opt/homebrew/Cellar/libuv/1.46.0/include/ /opt/homebrew/Cellar/libuv/1.46.0/src/)
+find_package(Boost REQUIRED COMPONENTS system)
 
-# Add the uv library target
-add_library(uv STATIC IMPORTED)
-set_target_properties(uv PROPERTIES IMPORTED_LOCATION /opt/homebrew/Cellar/libuv/1.46.0/lib/libuv.a)
+add_executable(FlowDB src/main.cpp
+        src/connection_pool.h
+        src/connection_pool.cpp)
 
-add_executable(FlowDB main.cpp)
-
-target_link_libraries(FlowDB uv)
+target_include_directories(FlowDB PRIVATE ${Boost_INCLUDE_DIRS})
+target_link_libraries(FlowDB PRIVATE ${Boost_LIBRARIES})
