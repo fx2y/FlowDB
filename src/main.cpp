@@ -4,31 +4,28 @@
 
 using boost::asio::ip::tcp;
 
-void handle_write(const boost::system::error_code& error, std::size_t bytes_transferred) {
-    if (!error) {
-        std::cout << "Data sent successfully" << std::endl;
-    } else {
-        std::cerr << "Error sending data: " << error.message() << std::endl;
-    }
-}
-
 int main() {
     boost::asio::io_context io_context;
-    tcp::endpoint endpoint{tcp::v4(), 12345};
-    ConnectionPool connection_pool(io_context, endpoint, 5);
+    tcp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234);
+    ConnectionPool connection_pool(io_context, endpoint, 10);
 
-    // Obtain a socket from the connection pool
-    std::shared_ptr<tcp::socket> socket_ptr = connection_pool.get_connection();
+    try {
+        tcp::endpoint local_endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0);
+        std::unique_ptr<tcp::socket> socket_ptr = std::make_unique<tcp::socket>(io_context);
+        *socket_ptr = std::move(connection_pool.get_connection(local_endpoint));
 
-    if (socket_ptr->is_open()) {
-        // Use the socket to communicate with other fdbserver processes
-        boost::asio::async_write(*socket_ptr, boost::asio::buffer("Hello, world!"), handle_write);
+        std::string message = "Hello, world!";
+        boost::asio::write(*socket_ptr, boost::asio::buffer(message));
+
+        char buffer[1024];
+        size_t bytes_transferred = socket_ptr->read_some(boost::asio::buffer(buffer));
+        std::cout << "Received " << bytes_transferred << " bytes: " << buffer << std::endl;
+
+        connection_pool.return_connection(std::move(socket_ptr));
+        socket_ptr.reset();
+    } catch (const std::exception &e) {
+        std::cerr << "Error: " << e.what() << std::endl;
     }
-
-    // Return the socket to the connection pool
-    connection_pool.return_connection(socket_ptr);
-
-    io_context.run();
 
     return 0;
 }

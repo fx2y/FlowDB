@@ -11,3 +11,7 @@ add_executable(FlowDB src/main.cpp
 
 target_include_directories(FlowDB PRIVATE ${Boost_INCLUDE_DIRS})
 target_link_libraries(FlowDB PRIVATE ${Boost_LIBRARIES})
+
+add_executable(remote_endpoint main.cpp)
+target_include_directories(remote_endpoint PRIVATE ${Boost_INCLUDE_DIRS})
+target_link_libraries(remote_endpoint PRIVATE ${Boost_LIBRARIES})

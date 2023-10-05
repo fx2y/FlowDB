@@ -11,9 +11,11 @@
 ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, tcp::endpoint endpoint, int num_connections)
         : io_context_(io_context), endpoint_(std::move(endpoint)), num_connections_(num_connections),
           next_connection_(0) {
-    connections_.reserve(num_connections_);
-    for (int i = 0; i < num_connections_; i++) {
-        connections_.emplace_back(io_context_);
+    // Use the resize method to pre-allocate space for the connections vector
+    connections_.resize(num_connections_);
+    // Use a for loop to initialize each socket in the vector
+    for (auto &socket: connections_) {
+        socket = std::make_unique<tcp::socket>(io_context_);
     }
 }
 
@@ -24,15 +26,31 @@ ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, tcp::endpoin
  * 
  * @return std::shared_ptr<tcp::socket> A shared pointer to a TCP socket.
  */
-std::shared_ptr<tcp::socket> ConnectionPool::get_connection() {
+// Use a const reference parameter to avoid unnecessary copying of endpoint objects
+tcp::socket &ConnectionPool::get_connection(const tcp::endpoint &local_endpoint) {
     // Lock the mutex to ensure thread safety.
     std::unique_lock<std::mutex> lock(mutex_);
-    if (connections_.empty()) {
-        throw std::runtime_error("Connection pool is empty");
-    }
-    auto &socket = connections_[next_connection_];
+    // Use an assert to check that the connection pool is not empty
+    assert(!connections_.empty());
+    auto &socket = *connections_[next_connection_];
     next_connection_ = (next_connection_ + 1) % num_connections_;
-    return std::make_shared<tcp::socket>(std::move(socket));
+    lock.unlock();
+    // Check if the socket is already open
+    if (!socket.is_open()) {
+        // Open the socket if it is not already open
+        socket.open(tcp::v4());
+    }
+    // Use the bind method to bind the socket to the local endpoint
+    boost::system::error_code ec;
+    socket.bind(local_endpoint, ec);
+    if (ec) {
+        // Handle the error if the bind method failed
+        throw std::runtime_error("Failed to bind socket to local endpoint: " + ec.message());
+    }
+    // Use the connect method to connect the socket to the remote endpoint
+    socket.connect(endpoint_);
+    lock.lock();
+    return socket;
 }
 
 /**
@@ -40,8 +58,14 @@ std::shared_ptr<tcp::socket> ConnectionPool::get_connection() {
  *
  * @param socket A shared pointer to a TCP socket.
  */
-void ConnectionPool::return_connection(const std::shared_ptr<tcp::socket>& socket) {
+// Use a rvalue reference parameter to allow move semantics
+void ConnectionPool::return_connection(std::unique_ptr<tcp::socket> socket) {
     // Lock the mutex to ensure thread safety.
     std::unique_lock<std::mutex> lock(mutex_);
-    connections_.push_back(std::move(*socket));
+    if (!socket || !socket->is_open()) {
+        // Handle the error if the socket is null or not open
+        throw std::runtime_error("Socket is null or not open");
+    }
+    // Use the emplace_back method to move the socket to the back of the vector
+    connections_.emplace_back(std::move(socket));
 }
