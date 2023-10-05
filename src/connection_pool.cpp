@@ -8,8 +8,13 @@
  * @param io_context The boost::asio::io_context object to use for asynchronous operations.
  * @param endpoint The TCP endpoint to connect to.
  */
-ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, tcp::endpoint endpoint)
-        : io_context_(io_context), endpoint_(std::move(endpoint)) {}
+ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, tcp::endpoint endpoint, int num_connections)
+        : io_context_(io_context), endpoint_(std::move(endpoint)), num_connections_(num_connections),
+          next_connection_(0) {
+    for (int i = 0; i < num_connections_; i++) {
+        connections_.emplace_back(io_context_);
+    }
+}
 
 /**
  * @brief Returns a TCP socket from the connection pool.
@@ -21,15 +26,9 @@ ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, tcp::endpoin
 std::shared_ptr<tcp::socket> ConnectionPool::get_connection() {
     // Lock the mutex to ensure thread safety.
     std::unique_lock<std::mutex> lock(mutex_);
-    if (!connections_.empty()) {
-        auto socket = std::move(connections_.front());
-        connections_.pop_front();
-        return std::make_shared<tcp::socket>(std::move(socket));
-    } else {
-        auto socket = std::make_shared<tcp::socket>(io_context_);
-        connect(socket);
-        return socket;
-    }
+    auto &socket = connections_[next_connection_];
+    next_connection_ = (next_connection_ + 1) % num_connections_;
+    return std::make_shared<tcp::socket>(std::move(socket));
 }
 
 /**
@@ -41,27 +40,4 @@ void ConnectionPool::return_connection(const std::shared_ptr<tcp::socket>& socke
     // Lock the mutex to ensure thread safety.
     std::unique_lock<std::mutex> lock(mutex_);
     connections_.push_back(std::move(*socket));
-}
-
-/**
- * @brief Establishes a connection to the endpoint and adds the socket to the connection pool.
- * 
- * @details Asynchronously connects to the endpoint using the specified socket. If the connection is successful,
- * the socket is added to the connection pool. If the connection fails, the function is called recursively to
- * attempt to connect again.
- *
- * @param socket A shared pointer to a TCP socket.
- */
-void ConnectionPool::connect(const std::shared_ptr<tcp::socket>& socket) {
-    // Asynchronously connect to the endpoint.
-    socket->async_connect(endpoint_, [this, socket](const boost::system::error_code &error) {
-        // If the connection is successful, add the socket to the connection pool.
-        if (!error) {
-            return_connection(socket);
-        }
-            // If the connection fails, call the function recursively to attempt to connect again.
-        else {
-            connect(socket);
-        }
-    });
 }

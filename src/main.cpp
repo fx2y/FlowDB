@@ -15,7 +15,7 @@ void handle_write(const boost::system::error_code& error, std::size_t bytes_tran
 int main() {
     boost::asio::io_context io_context;
     tcp::endpoint endpoint{tcp::v4(), 12345};
-    ConnectionPool connection_pool(io_context, endpoint);
+    ConnectionPool connection_pool(io_context, endpoint, 5);
 
     // Obtain a socket from the connection pool
     std::shared_ptr<tcp::socket> socket_ptr = connection_pool.get_connection();

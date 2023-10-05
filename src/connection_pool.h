@@ -9,18 +9,18 @@ using boost::asio::ip::tcp;
 
 class ConnectionPool {
 public:
-    ConnectionPool(boost::asio::io_context &io_context, tcp::endpoint endpoint);
+    ConnectionPool(boost::asio::io_context &io_context, tcp::endpoint endpoint, int num_connections);
 
     std::shared_ptr<tcp::socket> get_connection();
 
     void return_connection(const std::shared_ptr<tcp::socket>& socket);
 
 private:
-    void connect(const std::shared_ptr<tcp::socket>& socket);
-
     boost::asio::io_context &io_context_;
     tcp::endpoint endpoint_;
-    std::deque<tcp::socket> connections_;
+    int num_connections_;
+    int next_connection_;
+    std::vector<tcp::socket> connections_;
     std::mutex mutex_;
 };
 
