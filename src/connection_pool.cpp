@@ -11,6 +11,7 @@
 ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, tcp::endpoint endpoint, int num_connections)
         : io_context_(io_context), endpoint_(std::move(endpoint)), num_connections_(num_connections),
           next_connection_(0) {
+    connections_.reserve(num_connections_);
     for (int i = 0; i < num_connections_; i++) {
         connections_.emplace_back(io_context_);
     }
@@ -26,6 +27,9 @@ ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, tcp::endpoin
 std::shared_ptr<tcp::socket> ConnectionPool::get_connection() {
     // Lock the mutex to ensure thread safety.
     std::unique_lock<std::mutex> lock(mutex_);
+    if (connections_.empty()) {
+        throw std::runtime_error("Connection pool is empty");
+    }
     auto &socket = connections_[next_connection_];
     next_connection_ = (next_connection_ + 1) % num_connections_;
     return std::make_shared<tcp::socket>(std::move(socket));
