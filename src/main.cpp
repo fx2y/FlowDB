@@ -4,10 +4,27 @@
 
 using boost::asio::ip::tcp;
 
+void
+timer_handler(const boost::system::error_code &ec, boost::asio::steady_timer &timer, ConnectionPool &connection_pool) {
+    if (!ec) {
+        connection_pool.detect_failures();
+        timer.expires_at(timer.expiry() + boost::asio::chrono::seconds(5));
+        timer.async_wait([&](const boost::system::error_code &ec) {
+            timer_handler(ec, timer, connection_pool);
+        });
+    }
+}
+
 int main() {
     boost::asio::io_context io_context;
     tcp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234);
     ConnectionPool connection_pool(io_context, endpoint, 10);
+
+    // Start a timer to call detect_failures every 5 seconds
+    boost::asio::steady_timer timer(io_context, boost::asio::chrono::seconds(5));
+    timer.async_wait([&](const boost::system::error_code &ec) {
+        timer_handler(ec, timer, connection_pool);
+    });
 
     try {
         tcp::endpoint local_endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0);

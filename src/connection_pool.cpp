@@ -1,6 +1,7 @@
 #include "connection_pool.h"
 
 #include <utility>
+#include <iostream>
 
 /**
  * @brief Constructor for ConnectionPool class.
@@ -68,4 +69,22 @@ void ConnectionPool::return_connection(std::unique_ptr<tcp::socket> socket) {
     }
     // Use the emplace_back method to move the socket to the back of the vector
     connections_.emplace_back(std::move(socket));
+}
+
+void ConnectionPool::detect_failures() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    for (auto &socket: connections_) {
+        boost::system::error_code ec;
+        socket->non_blocking(true);
+        socket->send(boost::asio::buffer("ping"), 0, ec);
+        if (ec) {
+            std::cerr << "Connection failed: " << ec.message() << std::endl;
+            socket->close(ec);
+            socket->connect(endpoint_, ec);
+            if (ec) {
+                std::cerr << "Reconnection failed: " << ec.message() << std::endl;
+            }
+        }
+        socket->non_blocking(false);
+    }
 }

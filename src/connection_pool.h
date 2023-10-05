@@ -15,6 +15,8 @@ public:
 
     void return_connection(std::unique_ptr<tcp::socket> socket);
 
+    void detect_failures();
+
 private:
     boost::asio::io_context &io_context_;
     tcp::endpoint endpoint_;
