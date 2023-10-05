@@ -71,20 +71,43 @@ void ConnectionPool::return_connection(std::unique_ptr<tcp::socket> socket) {
     connections_.emplace_back(std::move(socket));
 }
 
+/**
+ * Detects failures in the connections of the ConnectionPool object.
+ * This function iterates over each socket in the connections vector, sends a "ping" message to the socket,
+ * and checks if the socket fails to respond to the "ping" message. If a socket fails to respond,
+ * the function closes and reconnects the socket to the endpoint.
+ */
 void ConnectionPool::detect_failures() {
+    // Lock the mutex to prevent concurrent access to the connections vector
     std::unique_lock<std::mutex> lock(mutex_);
+
+    // Iterate over each socket in the connections vector
     for (auto &socket: connections_) {
+        // Set the socket to keep alive and non-blocking mode
         boost::system::error_code ec;
+        socket->set_option(tcp::socket::keep_alive(true));
         socket->non_blocking(true);
+
+        // Send a "ping" message to the socket
         socket->send(boost::asio::buffer("ping"), 0, ec);
+
+        // If the socket fails to respond to the "ping" message
         if (ec) {
-            std::cerr << "Connection failed: " << ec.message() << std::endl;
+            // Close and reconnect the socket to the endpoint
+            socket->shutdown(tcp::socket::shutdown_both, ec);
             socket->close(ec);
-            socket->connect(endpoint_, ec);
-            if (ec) {
-                std::cerr << "Reconnection failed: " << ec.message() << std::endl;
-            }
+            socket->async_connect(endpoint_, [this, &socket](const boost::system::error_code &ec) {
+                if (ec) {
+                    // If the reconnection fails, close the socket
+                    io_context_.post([this, &socket]() {
+                        socket->close();
+                        socket->connect(endpoint_);
+                    });
+                }
+            });
         }
+
+        // Set the socket back to blocking mode
         socket->non_blocking(false);
     }
 }
