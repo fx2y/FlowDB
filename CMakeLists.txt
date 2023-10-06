@@ -7,7 +7,11 @@ find_package(Boost REQUIRED COMPONENTS system)
 
 add_executable(FlowDB src/main.cpp
         src/connection_pool.h
-        src/connection_pool.cpp)
+        src/connection_pool.cpp
+        src/actor.cpp
+        src/actor.h
+        src/runtime.cpp
+        src/runtime.h)
 
 target_include_directories(FlowDB PRIVATE ${Boost_INCLUDE_DIRS})
 target_link_libraries(FlowDB PRIVATE ${Boost_LIBRARIES})
