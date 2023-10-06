@@ -96,15 +96,25 @@ void ConnectionPool::detect_failures() {
             // Close and reconnect the socket to the endpoint
             socket->shutdown(tcp::socket::shutdown_both, ec);
             socket->close(ec);
-            socket->async_connect(endpoint_, [this, &socket](const boost::system::error_code &ec) {
-                if (ec) {
-                    // If the reconnection fails, close the socket
-                    io_context_.post([this, &socket]() {
-                        socket->close();
-                        socket->connect(endpoint_);
+
+            // Use exponential backoff to avoid overwhelming the network
+            auto delay = std::chrono::milliseconds(1);
+            for (int i = 0; i < 5; ++i) {
+                delay *= 2;
+                io_context_.post([this, &socket, delay]() {
+                    socket->close();
+                    socket->async_connect(endpoint_, [this, &socket, delay](const boost::system::error_code &ec) {
+                        if (ec) {
+                            // If the reconnection fails, close the socket
+                            io_context_.post([this, &socket]() {
+                                socket->close();
+                                socket->connect(endpoint_);
+                            });
+                        }
                     });
-                }
-            });
+                });
+                std::this_thread::sleep_for(delay);
+            }
         }
 
         // Set the socket back to blocking mode
