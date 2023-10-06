@@ -102,20 +102,22 @@ void ConnectionPool::detect_failures() {
             auto delay = std::chrono::milliseconds(1);
             for (int i = 0; i < 5; ++i) {
                 delay *= 2;
-                io_context_.post([this, &socket, delay]() {
-                    socket->close();
-                    socket->async_connect(get_next_endpoint(),
-                                          [this, &socket, delay](const boost::system::error_code &ec) {
-                                              if (ec) {
-                                                  // If the reconnection fails, close the socket
-                                                  io_context_.post([this, &socket, delay]() {
-                                                      socket->close();
-                                                      socket->connect(get_next_endpoint());
-                                                  });
-                                              }
-                                          });
+                boost::asio::steady_timer timer(io_context_, delay);
+                timer.async_wait([this, &socket, delay](const boost::system::error_code &ec) {
+                    if (!ec) {
+                        socket->close();
+                        socket->async_connect(get_next_endpoint(),
+                                              [this, &socket, delay](const boost::system::error_code &ec) {
+                                                  if (ec) {
+                                                      // If the reconnection fails, close the socket
+                                                      io_context_.post([this, &socket, delay]() {
+                                                          socket->close();
+                                                          socket->connect(get_next_endpoint());
+                                                      });
+                                                  }
+                                              });
+                    }
                 });
-                std::this_thread::sleep_for(delay);
             }
         }
 
@@ -141,7 +143,7 @@ void ConnectionPool::resize(int num_connections) {
 }
 
 tcp::endpoint ConnectionPool::get_next_endpoint() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     assert(!endpoints_.empty());
     auto &endpoint = endpoints_[next_endpoint_];
     next_endpoint_ = (next_endpoint_ + 1) % endpoints_.size();
