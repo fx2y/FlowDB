@@ -9,8 +9,9 @@
  * @param io_context The boost::asio::io_context object to use for asynchronous operations.
  * @param endpoint The TCP endpoint to connect to.
  */
-ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, tcp::endpoint endpoint, int num_connections)
-        : io_context_(io_context), endpoint_(std::move(endpoint)), num_connections_(num_connections),
+ConnectionPool::ConnectionPool(boost::asio::io_context &io_context, const std::vector<tcp::endpoint> &endpoints,
+                               int num_connections)
+        : io_context_(io_context), endpoints_(endpoints), num_connections_(num_connections), next_endpoint_(0),
           next_connection_(0) {
     // Use the resize method to pre-allocate space for the connections vector
     connections_.resize(num_connections_);
@@ -49,7 +50,7 @@ tcp::socket &ConnectionPool::get_connection(const tcp::endpoint &local_endpoint)
         throw std::runtime_error("Failed to bind socket to local endpoint: " + ec.message());
     }
     // Use the connect method to connect the socket to the remote endpoint
-    socket.connect(endpoint_);
+    socket.connect(get_next_endpoint());
     lock.lock();
     return socket;
 }
@@ -103,15 +104,16 @@ void ConnectionPool::detect_failures() {
                 delay *= 2;
                 io_context_.post([this, &socket, delay]() {
                     socket->close();
-                    socket->async_connect(endpoint_, [this, &socket, delay](const boost::system::error_code &ec) {
-                        if (ec) {
-                            // If the reconnection fails, close the socket
-                            io_context_.post([this, &socket]() {
-                                socket->close();
-                                socket->connect(endpoint_);
-                            });
-                        }
-                    });
+                    socket->async_connect(get_next_endpoint(),
+                                          [this, &socket, delay](const boost::system::error_code &ec) {
+                                              if (ec) {
+                                                  // If the reconnection fails, close the socket
+                                                  io_context_.post([this, &socket, delay]() {
+                                                      socket->close();
+                                                      socket->connect(get_next_endpoint());
+                                                  });
+                                              }
+                                          });
                 });
                 std::this_thread::sleep_for(delay);
             }
@@ -120,4 +122,12 @@ void ConnectionPool::detect_failures() {
         // Set the socket back to blocking mode
         socket->non_blocking(false);
     }
+}
+
+tcp::endpoint ConnectionPool::get_next_endpoint() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    assert(!endpoints_.empty());
+    auto &endpoint = endpoints_[next_endpoint_];
+    next_endpoint_ = (next_endpoint_ + 1) % endpoints_.size();
+    return endpoint;
 }

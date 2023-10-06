@@ -17,8 +17,15 @@ timer_handler(const boost::system::error_code &ec, boost::asio::steady_timer &ti
 
 int main() {
     boost::asio::io_context io_context;
-    tcp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 1234);
-    ConnectionPool connection_pool(io_context, endpoint, 10);
+    // Define the endpoints for the network layer
+    std::vector<tcp::endpoint> endpoints = {
+            tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 8000),
+            tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 8001),
+            tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 8002)
+    };
+
+    // Create a connection pool with 10 connections
+    ConnectionPool connection_pool(io_context, endpoints, 10);
 
     // Start a timer to call detect_failures every 5 seconds
     boost::asio::steady_timer timer(io_context, boost::asio::chrono::seconds(5));
