@@ -18,12 +18,14 @@ public:
 
     void detect_failures();
 
+    void resize(int num_connections);
+
 private:
     boost::asio::io_context &io_context_;
     std::vector<tcp::endpoint> endpoints_;
     int num_connections_;
     int next_endpoint_;
-    int next_connection_;
+    std::atomic<int> next_connection_;
     std::vector<std::unique_ptr<tcp::socket>> connections_;
     std::mutex mutex_;
 

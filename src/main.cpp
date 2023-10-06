@@ -25,7 +25,8 @@ int main() {
     };
 
     // Create a connection pool with 10 connections
-    ConnectionPool connection_pool(io_context, endpoints, 10);
+    ConnectionPool connection_pool(io_context, endpoints, 5);
+    connection_pool.resize(10);
 
     // Start a timer to call detect_failures every 5 seconds
     boost::asio::steady_timer timer(io_context, boost::asio::chrono::seconds(5));

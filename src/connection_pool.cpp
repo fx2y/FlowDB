@@ -124,6 +124,22 @@ void ConnectionPool::detect_failures() {
     }
 }
 
+void ConnectionPool::resize(int num_connections) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (num_connections > num_connections_) {
+        connections_.resize(num_connections_);
+        for (auto &socket: connections_) {
+            socket = std::make_unique<tcp::socket>(io_context_);
+        }
+    } else if (num_connections < num_connections_) {
+        for (int i = 0; i < num_connections_ - num_connections; i++) {
+            connections_.back()->close();
+            connections_.pop_back();
+        }
+    }
+    num_connections_ = num_connections;
+}
+
 tcp::endpoint ConnectionPool::get_next_endpoint() {
     std::lock_guard<std::mutex> lock(mutex_);
     assert(!endpoints_.empty());
