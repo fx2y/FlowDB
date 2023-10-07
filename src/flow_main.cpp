@@ -19,7 +19,7 @@ private:
 };
 
 int main() {
-    Runtime runtime;
+    Runtime runtime(4);
     auto actor1 = runtime.create_actor<MyActor>();
     auto actor2 = runtime.create_actor<MyActor>();
 
@@ -27,6 +27,7 @@ int main() {
     actor1->tell(actor2, new int(2));
     actor1->tell(actor2, new int(3));
 
+    actor1->stop();
     runtime.stop();
 
     std::cout << "Sum: " << actor1->get_sum() << std::endl;
