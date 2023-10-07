@@ -39,12 +39,12 @@ public:
         }
         return *this;
     }
-    
+
     // Check if the future is valid
     [[nodiscard]] bool valid() const {
         return m_promise != nullptr;
     }
-    
+
     // Get the value of the future
     T get() {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -120,11 +120,9 @@ public:
     Future<T> get_future() {
         Future<T> future;
         std::unique_lock<std::mutex> lock(m_mutex);
+        future.set_promise(this);
         if (!m_value_set) {
-            future.set_promise(this);
             m_futures.push_back(&future);
-        } else {
-            future.m_promise = nullptr;
         }
         return future;
     }

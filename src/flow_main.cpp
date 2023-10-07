@@ -5,34 +5,45 @@
 
 class MyActor : public Actor<int> {
 public:
-    MyActor() : m_sum(0) {}
+    MyActor() : m_received(false) {}
 
-    void receive(std::shared_ptr<Actor<int>> sender, int msg) override {
-        m_sum += msg;
+    std::shared_ptr<Promise<int>> compute() {
+        auto promise = std::make_shared<Promise<int>>();
+        tell(promise, reinterpret_cast<void (Actor<int>::*)(std::shared_ptr<Promise<int>>&)>(&MyActor::handle_compute));
+        return promise;
     }
 
-    int get_sum() const {
-        return m_sum;
+    bool received() const {
+        return m_received;
+    }
+
+protected:
+    void receive(int msg) override {
+        m_received = true;
     }
 
 private:
-    int m_sum;
+    void handle_compute(const std::shared_ptr<Promise<int>>& promise) {
+        int result = 42;
+        promise->set_value(result);
+    }
+
+    bool m_received;
 };
 
 int main() {
-    Promise<int> promise;
-    Future<int> future = promise.get_future();
+    Runtime runtime(4);
+    auto actor = runtime.create_actor<MyActor>();
 
-    std::thread t([&promise] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        promise.set_value(42);
-    });
+    auto promise = actor->compute();
 
-    int result = future.get();
-
-    t.join();
+    int result = promise->get_future().get();
 
     std::cout << "Result: " << result << std::endl;
+    std::cout << "Received: " << actor->received() << std::endl;
+
+    actor->stop();
+    runtime.stop();
 
     return 0;
 }

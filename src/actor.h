@@ -6,20 +6,16 @@
 #include <condition_variable>
 #include <memory>
 #include <atomic>
+#include "future.h"
 
 class ActorBase {
 public:
     virtual ~ActorBase() = default;
 
-    virtual void tell(std::shared_ptr<ActorBase> sender, void *msg) = 0;
-
     virtual void stop() = 0;
 
     virtual void run() = 0;
 };
-
-template<typename T>
-class Message;
 
 template<typename T>
 class Actor : public ActorBase {
@@ -29,9 +25,9 @@ public:
     ~Actor() override = default;
 
     // Sends a message to the actor.
-    void tell(std::shared_ptr<ActorBase> sender, void *msg) override {
+    void tell(std::shared_ptr<Promise<T>> &promise, void (Actor<T>::*method)(std::shared_ptr<Promise<T>> &)) {
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_queue.push(Message<T>(std::static_pointer_cast<Actor<T>>(sender), *static_cast<T *>(msg)));
+        m_queue.emplace(method, &promise);
         m_cv.notify_one();
     }
 
@@ -51,12 +47,12 @@ public:
             while (!m_queue.empty()) {
 
                 // Get the next message from the queue
-                Message<T> msg = m_queue.front();
+                auto [method, promise] = std::move(m_queue.front());
                 m_queue.pop();
                 lock.unlock();
 
                 // Process the message
-                receive(msg.sender, msg.data);
+                (this->*method)(*promise);
                 lock.lock();
             }
         }
@@ -65,11 +61,11 @@ public:
 protected:
     // Called when a message is received by the actor.
     // Subclasses should implement this method to handle messages.
-    virtual void receive(std::shared_ptr<Actor<T>> sender, T msg) = 0;
+    virtual void receive(T msg) = 0;
 
 private:
     // The queue of messages waiting to be processed by the actor.
-    std::queue<Message<T>> m_queue;
+    std::queue<std::pair<void (Actor<T>::*)(std::shared_ptr<Promise<T>> &), std::shared_ptr<Promise<T>> *>> m_queue;
 
     // The mutex used to synchronize access to the message queue.
     std::mutex m_mutex;
@@ -79,15 +75,6 @@ private:
 
     // A flag indicating whether the actor should stop processing messages.
     std::atomic<bool> m_done;
-};
-
-template<typename T>
-class Message {
-public:
-    Message(std::shared_ptr<Actor<T>> sender, T data) : sender(sender), data(data) {}
-
-    std::shared_ptr<Actor<T>> sender;
-    T data;
 };
 
 #endif //FLOWDB_ACTOR_H
