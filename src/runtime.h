@@ -71,8 +71,6 @@ public:
         std::shared_ptr<T> actor = std::make_shared<T>();
         m_actors.push_back(actor);
         m_thread_pool.submit([actor] { actor->run(); });
-        std::thread t(&T::run, actor);
-        t.detach();
         return actor;
     }
 

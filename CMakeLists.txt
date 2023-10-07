@@ -16,4 +16,6 @@ add_executable(remote_endpoint main.cpp)
 target_include_directories(remote_endpoint PRIVATE ${Boost_INCLUDE_DIRS})
 target_link_libraries(remote_endpoint PRIVATE ${Boost_LIBRARIES})
 
-add_executable(flow_main src/flow_main.cpp src/actor.h src/runtime.h)
+add_executable(flow_main src/flow_main.cpp src/actor.h src/runtime.h
+        src/future.h
+)

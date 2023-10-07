@@ -1,5 +1,6 @@
 #include "runtime.h"
 #include "actor.h"
+#include "future.h"
 #include <iostream>
 
 class MyActor : public Actor<int> {
@@ -19,18 +20,19 @@ private:
 };
 
 int main() {
-    Runtime runtime(4);
-    auto actor1 = runtime.create_actor<MyActor>();
-    auto actor2 = runtime.create_actor<MyActor>();
+    Promise<int> promise;
+    Future<int> future = promise.get_future();
 
-    actor1->tell(actor2, new int(1));
-    actor1->tell(actor2, new int(2));
-    actor1->tell(actor2, new int(3));
+    std::thread t([&promise] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        promise.set_value(42);
+    });
 
-    actor1->stop();
-    runtime.stop();
+    int result = future.get();
 
-    std::cout << "Sum: " << actor1->get_sum() << std::endl;
+    t.join();
+
+    std::cout << "Result: " << result << std::endl;
 
     return 0;
 }
